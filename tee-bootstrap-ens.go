@@ -137,8 +137,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	userReportData := make([]byte, 64)
-	err = ioutil.WriteFile("/dev/attestation/user_report_data", userReportData, 0644)
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//privateKeyBytes := crypto.FromECDSA(privateKey)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		log.Fatal("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+	}
+
+	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
+	fmt.Println("Public Key:", hexutil.Encode(publicKeyBytes))
+
+	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+	fmt.Println("Address:", address)
+
+	err = ioutil.WriteFile("/dev/attestation/user_report_data", []byte(address), 0644)
 	if err != nil {
 		fmt.Println("Error writing to /dev/attestation/user_report_data:", err)
 		os.Exit(1)
@@ -176,31 +194,12 @@ func main() {
 	fmt.Printf("  REPORTDATA:       %x\n", report[320:352])
 	fmt.Printf("                    %x\n", report[352:384])
 
-	mr_enclave := report[64:96]
-	//mr_signer := report[128:160]
+	//mr_enclave := report[64:96]
+	mr_signer := report[128:160]
 	enclave_data := slices.Concat(report[64:96], report[128:160])
 	enclave_hash := crypto.Keccak256Hash(enclave_data)
 
 	fmt.Println("my id: ", enclave_hash)
-
-	privateKey, err := crypto.GenerateKey()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//privateKeyBytes := crypto.FromECDSA(privateKey)
-
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		log.Fatal("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
-	}
-
-	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
-	fmt.Println("Public Key:", hexutil.Encode(publicKeyBytes))
-
-	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
-	fmt.Println("Address:", address)
 
 	myid := deagon.RandomName(deagon.NewLowercaseDashFormatter())
 
@@ -225,7 +224,7 @@ func main() {
 		Message string `json:"message"`
 	}
 	type Text struct {
-		Mr_enclave string `json:"description"`
+		Mr_signer string `json:"description"`
 	}
 	type Address struct {
 		Sixty string `json:"60"`
@@ -248,7 +247,7 @@ func main() {
 		Sixty: address,
 	}
 	text := Text{
-		Mr_enclave: "mr_enclave: " + hexutil.Encode(mr_enclave),
+		Mr_signer: "mr_signer: " + hexutil.Encode(mr_signer),
 	}
 	dataz := Payload{
 		Name:      name,
